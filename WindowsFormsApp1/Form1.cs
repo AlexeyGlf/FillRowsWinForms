@@ -225,7 +225,7 @@ namespace WindowsFormsApp1
                 }
 
                 _totalRow = new DataGridViewRow();
-
+                _totalRow.ReadOnly = true;
                 // Создаем ячейки для каждой колонки
                 for (int i = 0; i < this.ColumnCount; i++)
                 {
@@ -566,24 +566,34 @@ namespace WindowsFormsApp1
         {
             if (e.Button == MouseButtons.Left && _isFillHandleVisible && _fillHandleRect.Contains(e.Location))
             {
+                // ПОЛУЧАЕМ ТЕКУЩУЮ ЯЧЕЙКУ
+                var hit = this.HitTest(e.X, e.Y);
+
+                // ЕСЛИ ЭТО ПОСЛЕДНЯЯ СТРОКА - ЗАПРЕЩАЕМ
+                if (hit.RowIndex == this.Rows.Count - 2)
+                {
+                    // Это итоговая строка - не начинаем перетаскивание
+                    this.Cursor = Cursors.Default;
+                    return;
+                }
+
+                // Сохраняем выделенные ячейки
                 _selectedCellsBackup = new List<DataGridViewCell>();
                 foreach (DataGridViewCell cell in this.SelectedCells)
                 {
                     _selectedCellsBackup.Add(cell);
                 }
 
+                // Начинаем перетаскивание
                 _isDragging = true;
 
-                var hit = this.HitTest(e.X, e.Y);
-                if (hit.Type == DataGridViewHitTestType.Cell)
-                {
-                    _dragStartCell = new Point(hit.ColumnIndex, hit.RowIndex);
-                    _dragCurrentCell = _dragStartCell;
-                }
+                _dragStartCell = new Point(hit.ColumnIndex, hit.RowIndex);
+                _dragCurrentCell = _dragStartCell;
 
                 this.Cursor = Cursors.Cross;
                 this.Invalidate();
                 
+
             }
         }
 
@@ -594,6 +604,13 @@ namespace WindowsFormsApp1
                 var hit = this.HitTest(e.X, e.Y);
                 if (hit.Type == DataGridViewHitTestType.Cell)
                 {
+                    // НЕ ДАЕМ ПЕРЕТАСКИВАТЬ НА ИТОГОВУЮ СТРОКУ
+                    if (hit.RowIndex == this.Rows.Count - 1)
+                    {
+                        // Если пытаются навести на итоговую строку - игнорируем
+                        return;
+                    }
+
                     if (_dragCurrentCell.X != hit.ColumnIndex || _dragCurrentCell.Y != hit.RowIndex)
                     {
                         _dragCurrentCell = new Point(hit.ColumnIndex, hit.RowIndex);
@@ -603,9 +620,20 @@ namespace WindowsFormsApp1
             }
             else
             {
+                // При наведении на маркер
                 if (_isFillHandleVisible && _fillHandleRect.Contains(e.Location))
                 {
-                    this.Cursor = Cursors.Cross;
+                    // Проверяем, не находится ли маркер на итоговой строке
+                    var hit = this.HitTest(e.X, e.Y);
+                    if (hit.RowIndex == this.Rows.Count - 1)
+                    {
+                        // Если маркер на итоговой строке - обычный курсор
+                        this.Cursor = Cursors.Default;
+                    }
+                    else
+                    {
+                        this.Cursor = Cursors.Cross;
+                    }
                 }
                 else
                 {
