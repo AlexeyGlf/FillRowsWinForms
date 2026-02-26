@@ -1,0 +1,81 @@
+Код для редактирования ячейки сразу
+
+public FillHandleDataGrid()
+{
+    // ... ваш существующий код ...
+    
+    // Добавляем обработчик PreviewMouseLeftButtonDown
+    this.PreviewMouseLeftButtonDown += FillHandleDataGrid_PreviewMouseLeftButtonDown;
+    
+    // Добавляем обработчик для выделения текста
+    this.PreparingCellForEdit += FillHandleDataGrid_PreparingCellForEdit;
+}
+
+private void FillHandleDataGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+{
+    // Находим ячейку под мышью
+    var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
+    if (cell == null) return;
+    
+    // Проверяем, что это не последняя строка
+    var row = FindVisualParent<DataGridRow>(cell);
+    if (row != null && row.GetIndex() == this.Items.Count - 1)
+        return; // Последняя строка - не редактируем
+    
+    // Если ячейка не в режиме редактирования
+    if (!cell.IsEditing)
+    {
+        // Небольшая задержка, чтобы не конфликтовать с выделением
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            // Устанавливаем фокус на ячейку
+            cell.Focus();
+            
+            // Начинаем редактирование
+            this.BeginEdit();
+        }), System.Windows.Threading.DispatcherPriority.Input);
+    }
+}
+
+private void FillHandleDataGrid_PreparingCellForEdit(object sender, DataGridPreparingCellForEditEventArgs e)
+{
+    // Выделяем весь текст при входе в редактирование
+    var textBox = e.EditingElement as TextBox;
+    if (textBox != null)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+}
+
+// Вспомогательные методы
+private T FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+{
+    var parent = VisualTreeHelper.GetParent(child);
+    while (parent != null && !(parent is T))
+    {
+        parent = VisualTreeHelper.GetParent(parent);
+    }
+    return parent as T;
+}
+
+private T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+{
+    for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+    {
+        var child = VisualTreeHelper.GetChild(parent, i);
+        if (child is T typedChild)
+            return typedChild;
+        
+        var result = FindVisualChild<T>(child);
+        if (result != null)
+            return result;
+    }
+    return null;
+}
+
+// Разрешаем выделение отдельных ячеек (не строк)
+    this.SelectionUnit = DataGridSelectionUnit.Cell;
+    
+    // Разрешаем выделение нескольких ячеек
+    this.SelectionMode = DataGridSelectionMode.Extended;
