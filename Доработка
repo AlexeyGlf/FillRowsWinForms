@@ -1,81 +1,97 @@
-Код для редактирования ячейки сразу
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-public FillHandleDataGrid()
-{
-    // ... ваш существующий код ...
-    
-    // Добавляем обработчик PreviewMouseLeftButtonDown
-    this.PreviewMouseLeftButtonDown += FillHandleDataGrid_PreviewMouseLeftButtonDown;
-    
-    // Добавляем обработчик для выделения текста
-    this.PreparingCellForEdit += FillHandleDataGrid_PreparingCellForEdit;
-}
+    <!-- Цвета Material Design -->
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#6200EE"/>
+    <SolidColorBrush x:Key="DividerBrush" Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="#20000000"/>
+    <SolidColorBrush x:Key="SelectedBrush" Color="#406200EE"/>
 
-private void FillHandleDataGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-{
-    // Находим ячейку под мышью
-    var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
-    if (cell == null) return;
-    
-    // Проверяем, что это не последняя строка
-    var row = FindVisualParent<DataGridRow>(cell);
-    if (row != null && row.GetIndex() == this.Items.Count - 1)
-        return; // Последняя строка - не редактируем
-    
-    // Если ячейка не в режиме редактирования
-    if (!cell.IsEditing)
-    {
-        // Небольшая задержка, чтобы не конфликтовать с выделением
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            // Устанавливаем фокус на ячейку
-            cell.Focus();
-            
-            // Начинаем редактирование
-            this.BeginEdit();
-        }), System.Windows.Threading.DispatcherPriority.Input);
-    }
-}
+    <!-- Упрощенный стиль DataGrid -->
+    <Style x:Key="MaterialDataGrid" TargetType="DataGrid">
+        <!-- Основные настройки -->
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="BorderBrush" Value="#E0E0E0"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="RowHeaderWidth" Value="0"/>
+        <Setter Property="GridLinesVisibility" Value="None"/>
+        <Setter Property="AutoGenerateColumns" Value="False"/>
+        <Setter Property="CanUserAddRows" Value="False"/>
+        <Setter Property="SelectionMode" Value="Single"/>
+        <Setter Property="SelectionUnit" Value="FullRow"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="14"/>
 
-private void FillHandleDataGrid_PreparingCellForEdit(object sender, DataGridPreparingCellForEditEventArgs e)
-{
-    // Выделяем весь текст при входе в редактирование
-    var textBox = e.EditingElement as TextBox;
-    if (textBox != null)
-    {
-        textBox.Focus();
-        textBox.SelectAll();
-    }
-}
+        <!-- Стиль заголовков -->
+        <Setter Property="ColumnHeaderStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Height" Value="48"/>
+                    <Setter Property="Padding" Value="16,8"/>
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="Foreground" Value="#6200EE"/>
+                    <Setter Property="FontWeight" Value="Medium"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                    <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                </Style>
+            </Setter.Value>
+        </Setter>
 
-// Вспомогательные методы
-private T FindVisualParent<T>(DependencyObject child) where T : DependencyObject
-{
-    var parent = VisualTreeHelper.GetParent(child);
-    while (parent != null && !(parent is T))
-    {
-        parent = VisualTreeHelper.GetParent(parent);
-    }
-    return parent as T;
-}
+        <!-- Стиль ячеек -->
+        <Setter Property="CellStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Padding" Value="16,8"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Foreground" Value="#212121"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="DataGridCell">
+                                <Border Padding="{TemplateBinding Padding}"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}">
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#406200EE"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#20000000"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Setter.Value>
+        </Setter>
 
-private T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
-{
-    for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-    {
-        var child = VisualTreeHelper.GetChild(parent, i);
-        if (child is T typedChild)
-            return typedChild;
-        
-        var result = FindVisualChild<T>(child);
-        if (result != null)
-            return result;
-    }
-    return null;
-}
-
-// Разрешаем выделение отдельных ячеек (не строк)
-    this.SelectionUnit = DataGridSelectionUnit.Cell;
-    
-    // Разрешаем выделение нескольких ячеек
-    this.SelectionMode = DataGridSelectionMode.Extended;
+        <!-- Стиль строк -->
+        <Setter Property="RowStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Height" Value="48"/>
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#F5F5F5"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#406200EE"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
