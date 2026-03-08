@@ -1,97 +1,110 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+using System.Data;
+using System.Reflection;
+using System.Reflection.Emit;
 
-    <!-- Цвета Material Design -->
-    <SolidColorBrush x:Key="PrimaryBrush" Color="#6200EE"/>
-    <SolidColorBrush x:Key="DividerBrush" Color="#E0E0E0"/>
-    <SolidColorBrush x:Key="HoverBrush" Color="#20000000"/>
-    <SolidColorBrush x:Key="SelectedBrush" Color="#406200EE"/>
+class Program
+{
+    static void Main()
+    {
+        var dataTable = new DataTable();
+        dataTable.Columns.Add("ID", typeof(int));
+        dataTable.Columns.Add("Name", typeof(string));
+        dataTable.Columns.Add("Age", typeof(double));
 
-    <!-- Упрощенный стиль DataGrid -->
-    <Style x:Key="MaterialDataGrid" TargetType="DataGrid">
-        <!-- Основные настройки -->
-        <Setter Property="Background" Value="White"/>
-        <Setter Property="BorderBrush" Value="#E0E0E0"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="RowHeaderWidth" Value="0"/>
-        <Setter Property="GridLinesVisibility" Value="None"/>
-        <Setter Property="AutoGenerateColumns" Value="False"/>
-        <Setter Property="CanUserAddRows" Value="False"/>
-        <Setter Property="SelectionMode" Value="Single"/>
-        <Setter Property="SelectionUnit" Value="FullRow"/>
-        <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="14"/>
+        dataTable.Rows.Add(DBNull.Value, "Alice", 25.5);
+        dataTable.Rows.Add(2, "Bob", 30.0);
 
-        <!-- Стиль заголовков -->
-        <Setter Property="ColumnHeaderStyle">
-            <Setter.Value>
-                <Style TargetType="DataGridColumnHeader">
-                    <Setter Property="Height" Value="48"/>
-                    <Setter Property="Padding" Value="16,8"/>
-                    <Setter Property="Background" Value="White"/>
-                    <Setter Property="Foreground" Value="#6200EE"/>
-                    <Setter Property="FontWeight" Value="Medium"/>
-                    <Setter Property="FontSize" Value="12"/>
-                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                    <Setter Property="BorderBrush" Value="#E0E0E0"/>
-                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                </Style>
-            </Setter.Value>
-        </Setter>
+        var objects = DynamicClassGenerator.DataTableToListOfDynamicObjects(dataTable);
 
-        <!-- Стиль ячеек -->
-        <Setter Property="CellStyle">
-            <Setter.Value>
-                <Style TargetType="DataGridCell">
-                    <Setter Property="Padding" Value="16,8"/>
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="BorderThickness" Value="0"/>
-                    <Setter Property="FontSize" Value="14"/>
-                    <Setter Property="Foreground" Value="#212121"/>
-                    <Setter Property="VerticalAlignment" Value="Center"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="DataGridCell">
-                                <Border Padding="{TemplateBinding Padding}"
-                                        Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}">
-                                    <ContentPresenter VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                    <Style.Triggers>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#406200EE"/>
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#20000000"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </Setter.Value>
-        </Setter>
+        foreach (var obj in objects)
+        {
+            Console.WriteLine(obj.GetType().GetProperty("Name").GetValue(obj));
+        }
+    }
 
-        <!-- Стиль строк -->
-        <Setter Property="RowStyle">
-            <Setter.Value>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="Height" Value="48"/>
-                    <Setter Property="Background" Value="White"/>
-                    <Setter Property="BorderBrush" Value="#E0E0E0"/>
-                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#F5F5F5"/>
-                        </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#406200EE"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </Setter.Value>
-        </Setter>
-    </Style>
-</ResourceDictionary>
+
+    public static class DynamicClassGenerator
+    {
+        public static Type GenerateClassFromDataTable(DataTable table)
+        {
+            var typeBuilder = CreateTypeBuilder("DynamicClass");
+
+            foreach (DataColumn column in table.Columns)
+            {
+                CreateAutoImplementedProperty(typeBuilder, column.ColumnName, column.DataType);
+            }
+
+            return typeBuilder.CreateType();
+        }
+
+        private static TypeBuilder CreateTypeBuilder(string typeName)
+        {
+            var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName("DynamicTypes"), AssemblyBuilderAccess.Run);
+
+            var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
+
+            var typeBuilder = moduleBuilder.DefineType("DynamicClass",
+                TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit | TypeAttributes.NotPublic,
+                typeof(object));
+            //var typeBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(
+            //    new AssemblyName("DynamicTypes"), AssemblyBuilderAccess.Run)
+            //.DefineDynamicModule("MainModule")
+            //.DefineType(typeName, TypeAttributes.Public);
+
+            typeBuilder.DefineDefaultConstructor(MethodAttributes.Public);
+            return typeBuilder;
+        }
+
+        private static void CreateAutoImplementedProperty(TypeBuilder typeBuilder, string propertyName, Type propertyType)
+        {
+            var fieldBuilder = typeBuilder.DefineField($"_{propertyName}", propertyType, FieldAttributes.Private);
+
+            var propertyBuilder = typeBuilder.DefineProperty(propertyName, PropertyAttributes.HasDefault, propertyType, null);
+
+            var getterMethod = typeBuilder.DefineMethod($"get_{propertyName}",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                propertyType, Type.EmptyTypes);
+
+            var getterIL = getterMethod.GetILGenerator();
+            getterIL.Emit(OpCodes.Ldarg_0);
+            getterIL.Emit(OpCodes.Ldfld, fieldBuilder);
+            getterIL.Emit(OpCodes.Ret);
+
+            var setterMethod = typeBuilder.DefineMethod($"set_{propertyName}",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                null, new Type[] { propertyType });
+
+            var setterIL = setterMethod.GetILGenerator();
+            setterIL.Emit(OpCodes.Ldarg_0);
+            setterIL.Emit(OpCodes.Ldarg_1);
+            setterIL.Emit(OpCodes.Stfld, fieldBuilder);
+            setterIL.Emit(OpCodes.Ret);
+
+            propertyBuilder.SetGetMethod(getterMethod);
+            propertyBuilder.SetSetMethod(setterMethod);
+        }
+
+        public static List<object> DataTableToListOfDynamicObjects(DataTable table)
+        {
+            var type = GenerateClassFromDataTable(table);
+            var list = new List<object>();
+
+            foreach (DataRow row in table.Rows)
+            {
+                var instance = Activator.CreateInstance(type);
+
+                foreach (DataColumn col in table.Columns)
+                {
+                    var property = type.GetProperty(col.ColumnName);
+                    var value = row[col];
+                    property?.SetValue(instance, value == DBNull.Value ? null : value);
+                }
+
+                list.Add(instance);
+            }
+
+            return list;
+        }
+    }
+}
