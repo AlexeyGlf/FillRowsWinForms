@@ -108,3 +108,83 @@ class Program
         }
     }
 }
+
+
+
+var dataTable = new DataTable();
+dataTable.Columns.Add("ID", typeof(int));
+dataTable.Columns.Add("Name", typeof(string));
+dataTable.Columns.Add("Age", typeof(int));
+
+dataTable.Rows.Add(1, "Alice", 25);
+dataTable.Rows.Add(2, "Bob", 30);
+
+var objects = DataTablePocoGenerator.DataTableToListOfPocos(dataTable);
+
+var wrappedObjects = objects.Select(o => new DynamicObjectWrapper(o)).ToList();
+
+// Теперь можно работать с обёрнутыми объектами
+foreach (var wrapper in wrappedObjects)
+{
+    Console.WriteLine($"ID: {wrapper["ID"]}, Name: {wrapper["Name"]}, Age: {wrapper["Age"]}");
+    
+    // Обновление значения
+    if (wrapper.GetValue<int>("ID") == 1)
+    {
+        wrapper["Name"] = "Updated Alice";
+    }
+}
+
+public class DynamicObjectWrapper
+{
+    private readonly object _target;
+    private readonly Type _type;
+    private readonly Dictionary<string, PropertyInfo> _properties;
+
+    public DynamicObjectWrapper(object target)
+    {
+        _target = target;
+        _type = target.GetType();
+        _properties = _type.GetProperties().ToDictionary(p => p.Name, p => p);
+    }
+
+    public object this[int index] => _properties.Values.ElementAt(index).GetValue(_target);
+
+    public object this[string propertyName]
+    {
+        get => _properties.TryGetValue(propertyName, out var prop) ? prop.GetValue(_target) : null;
+        set
+        {
+            if (_properties.TryGetValue(propertyName, out var prop))
+            {
+                prop.SetValue(_target, value);
+            }
+        }
+    }
+
+    public T GetValue<T>(string propertyName)
+    {
+        if (_properties.TryGetValue(propertyName, out var prop))
+        {
+            var value = prop.GetValue(_target);
+            return value is T ? (T)value : default(T);
+        }
+        return default(T);
+    }
+
+    public void SetValue<T>(string propertyName, T value)
+    {
+        if (_properties.TryGetValue(propertyName, out var prop))
+        {
+            prop.SetValue(_target, value);
+        }
+    }
+
+    public IEnumerable<string> GetPropertyNames() => _properties.Keys;
+
+    public override string ToString()
+    {
+        var props = _properties.Select(kvp => $"{kvp.Key}: {kvp.Value.GetValue(_target)}");
+        return string.Join(", ", props);
+    }
+}
