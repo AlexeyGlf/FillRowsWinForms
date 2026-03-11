@@ -1,190 +1,121 @@
-using System.Data;
-using System.Reflection;
-using System.Reflection.Emit;
+// Файл MyClass.h
+typedef void __fastcall (__closure *TMyEvent)(int);
 
-class Program
-{
-    static void Main()
-    {
-        var dataTable = new DataTable();
-        dataTable.Columns.Add("ID", typeof(int));
-        dataTable.Columns.Add("Name", typeof(string));
-        dataTable.Columns.Add("Age", typeof(double));
-
-        dataTable.Rows.Add(DBNull.Value, "Alice", 25.5);
-        dataTable.Rows.Add(2, "Bob", 30.0);
-
-        var objects = DynamicClassGenerator.DataTableToListOfDynamicObjects(dataTable);
-
-        foreach (var obj in objects)
-        {
-            Console.WriteLine(obj.GetType().GetProperty("Name").GetValue(obj));
-        }
-    }
-
-
-    public static class DynamicClassGenerator
-    {
-        public static Type GenerateClassFromDataTable(DataTable table)
-        {
-            var typeBuilder = CreateTypeBuilder("DynamicClass");
-
-            foreach (DataColumn column in table.Columns)
-            {
-                CreateAutoImplementedProperty(typeBuilder, column.ColumnName, column.DataType);
-            }
-
-            return typeBuilder.CreateType();
-        }
-
-        private static TypeBuilder CreateTypeBuilder(string typeName)
-        {
-            var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(
-            new AssemblyName("DynamicTypes"), AssemblyBuilderAccess.Run);
-
-            var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
-
-            var typeBuilder = moduleBuilder.DefineType("DynamicClass",
-                TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit | TypeAttributes.NotPublic,
-                typeof(object));
-            //var typeBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(
-            //    new AssemblyName("DynamicTypes"), AssemblyBuilderAccess.Run)
-            //.DefineDynamicModule("MainModule")
-            //.DefineType(typeName, TypeAttributes.Public);
-
-            typeBuilder.DefineDefaultConstructor(MethodAttributes.Public);
-            return typeBuilder;
-        }
-
-        private static void CreateAutoImplementedProperty(TypeBuilder typeBuilder, string propertyName, Type propertyType)
-        {
-            var fieldBuilder = typeBuilder.DefineField($"_{propertyName}", propertyType, FieldAttributes.Private);
-
-            var propertyBuilder = typeBuilder.DefineProperty(propertyName, PropertyAttributes.HasDefault, propertyType, null);
-
-            var getterMethod = typeBuilder.DefineMethod($"get_{propertyName}",
-                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
-                propertyType, Type.EmptyTypes);
-
-            var getterIL = getterMethod.GetILGenerator();
-            getterIL.Emit(OpCodes.Ldarg_0);
-            getterIL.Emit(OpCodes.Ldfld, fieldBuilder);
-            getterIL.Emit(OpCodes.Ret);
-
-            var setterMethod = typeBuilder.DefineMethod($"set_{propertyName}",
-                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
-                null, new Type[] { propertyType });
-
-            var setterIL = setterMethod.GetILGenerator();
-            setterIL.Emit(OpCodes.Ldarg_0);
-            setterIL.Emit(OpCodes.Ldarg_1);
-            setterIL.Emit(OpCodes.Stfld, fieldBuilder);
-            setterIL.Emit(OpCodes.Ret);
-
-            propertyBuilder.SetGetMethod(getterMethod);
-            propertyBuilder.SetSetMethod(setterMethod);
-        }
-
-        public static List<object> DataTableToListOfDynamicObjects(DataTable table)
-        {
-            var type = GenerateClassFromDataTable(table);
-            var list = new List<object>();
-
-            foreach (DataRow row in table.Rows)
-            {
-                var instance = Activator.CreateInstance(type);
-
-                foreach (DataColumn col in table.Columns)
-                {
-                    var property = type.GetProperty(col.ColumnName);
-                    var value = row[col];
-                    property?.SetValue(instance, value == DBNull.Value ? null : value);
-                }
-
-                list.Add(instance);
-            }
-
-            return list;
-        }
-    }
-}
-
-
-
-var dataTable = new DataTable();
-dataTable.Columns.Add("ID", typeof(int));
-dataTable.Columns.Add("Name", typeof(string));
-dataTable.Columns.Add("Age", typeof(int));
-
-dataTable.Rows.Add(1, "Alice", 25);
-dataTable.Rows.Add(2, "Bob", 30);
-
-var objects = DataTablePocoGenerator.DataTableToListOfPocos(dataTable);
-
-var wrappedObjects = objects.Select(o => new DynamicObjectWrapper(o)).ToList();
-
-// Теперь можно работать с обёрнутыми объектами
-foreach (var wrapper in wrappedObjects)
-{
-    Console.WriteLine($"ID: {wrapper["ID"]}, Name: {wrapper["Name"]}, Age: {wrapper["Age"]}");
+class TMyClass {
+private:
+    TMyEvent FOnProcess;
     
-    // Обновление значения
-    if (wrapper.GetValue<int>("ID") == 1)
-    {
-        wrapper["Name"] = "Updated Alice";
+public:
+    __property TMyEvent OnProcess = {read=FOnProcess, write=FOnProcess};
+    
+    void Execute() {
+        if (FOnProcess) {
+            FOnProcess(100);
+        }
     }
+};
+
+// Файл Unit1.h
+class TForm1 : public TForm {
+    __published:
+        TButton *Button1;
+    private:
+        TMyClass *m_processor;
+    public:
+        __fastcall TForm1(TComponent* Owner);
+        __fastcall ~TForm1();
+        
+    protected:
+        void __fastcall Button1Click(TObject *Sender);
+        void __fastcall MyProcessHandler(int value);
+};
+
+// Файл Unit1.cpp
+__fastcall TForm1::TForm1(TComponent* Owner) : TForm(Owner) {
+    m_processor = new TMyClass();
+    m_processor->OnProcess = MyProcessHandler;
 }
 
-public class DynamicObjectWrapper
-{
-    private readonly object _target;
-    private readonly Type _type;
-    private readonly Dictionary<string, PropertyInfo> _properties;
+__fastcall TForm1::~TForm1() {
+    delete m_processor;
+}
 
-    public DynamicObjectWrapper(object target)
-    {
-        _target = target;
-        _type = target.GetType();
-        _properties = _type.GetProperties().ToDictionary(p => p.Name, p => p);
+void __fastcall TForm1::MyProcessHandler(int value) {
+    ShowMessage("Value: " + IntToStr(value));
+}
+
+void __fastcall TForm1::Button1Click(TObject *Sender) {
+    m_processor->Execute();
+}
+
+
+________________________________________________________________
+
+
+
+
+// Файл MyClass.h
+class TMyClass {
+private:
+    void (__closure *m_callback)(int);  // __closure - особенность C++ Builder
+    int m_value;
+    
+public:
+    TMyClass() : m_callback(NULL), m_value(0) {}
+    
+    // Устанавливаем callback
+    void SetCallback(void (__closure *callback)(int)) {
+        m_callback = callback;
     }
-
-    public object this[int index] => _properties.Values.ElementAt(index).GetValue(_target);
-
-    public object this[string propertyName]
-    {
-        get => _properties.TryGetValue(propertyName, out var prop) ? prop.GetValue(_target) : null;
-        set
-        {
-            if (_properties.TryGetValue(propertyName, out var prop))
-            {
-                prop.SetValue(_target, value);
-            }
+    
+    void DoSomething() {
+        // Вызываем callback, если он установлен
+        if (m_callback) {
+            m_callback(m_value);
         }
     }
+    
+    void SetValue(int val) { m_value = val; }
+};
 
-    public T GetValue<T>(string propertyName)
-    {
-        if (_properties.TryGetValue(propertyName, out var prop))
-        {
-            var value = prop.GetValue(_target);
-            return value is T ? (T)value : default(T);
-        }
-        return default(T);
-    }
+// Файл Unit1.h (главная форма)
+#include "MyClass.h"
 
-    public void SetValue<T>(string propertyName, T value)
-    {
-        if (_properties.TryGetValue(propertyName, out var prop))
-        {
-            prop.SetValue(_target, value);
-        }
-    }
+class TForm1 : public TForm {
+    __published: // IDE-managed Components
+        TButton *Button1;
+        TEdit *Edit1;
+    private:
+        TMyClass *m_processor;
+    public:
+        __fastcall TForm1(TComponent* Owner);
+        __fastcall ~TForm1();
+        
+        // Метод, который будет вызываться как callback
+        void __fastcall OnProcess(int value);
+        
+    protected:
+        void __fastcall Button1Click(TObject *Sender);
+};
 
-    public IEnumerable<string> GetPropertyNames() => _properties.Keys;
+// Файл Unit1.cpp
+__fastcall TForm1::TForm1(TComponent* Owner) : TForm(Owner) {
+    m_processor = new TMyClass();
+    
+    // Устанавливаем callback - передаем указатель на метод
+    m_processor->SetCallback(OnProcess);
+}
 
-    public override string ToString()
-    {
-        var props = _properties.Select(kvp => $"{kvp.Key}: {kvp.Value.GetValue(_target)}");
-        return string.Join(", ", props);
-    }
+__fastcall TForm1::~TForm1() {
+    delete m_processor;
+}
+
+void __fastcall TForm1::OnProcess(int value) {
+    // Этот метод вызовется из TMyClass::DoSomething()
+    Edit1->Text = IntToStr(value * 2);
+}
+
+void __fastcall TForm1::Button1Click(TObject *Sender) {
+    m_processor->SetValue(5);
+    m_processor->DoSomething(); // Здесь вызовется OnProcess
 }
