@@ -1,121 +1,47 @@
-// Файл MyClass.h
-typedef void __fastcall (__closure *TMyEvent)(int);
-
-class TMyClass {
-private:
-    TMyEvent FOnProcess;
+<Window.Resources>
+    <DataTemplate x:Key="SingleColumnTemplate">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding SomeProperty}"/>
+        </Grid>
+    </DataTemplate>
     
-public:
-    __property TMyEvent OnProcess = {read=FOnProcess, write=FOnProcess};
+    <DataTemplate x:Key="TwoColumnTemplate">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding SomeProperty}"/>
+            <TextBlock Grid.Column="1" Text="{Binding ExtraProperty}"/>
+        </Grid>
+    </DataTemplate>
     
-    void Execute() {
-        if (FOnProcess) {
-            FOnProcess(100);
-        }
-    }
-};
+    <local:MyDataTemplateSelector x:Key="TemplateSelector"
+        SingleColumnTemplate="{StaticResource SingleColumnTemplate}"
+        TwoColumnTemplate="{StaticResource TwoColumnTemplate}"/>
+</Window.Resources>
 
-// Файл Unit1.h
-class TForm1 : public TForm {
-    __published:
-        TButton *Button1;
-    private:
-        TMyClass *m_processor;
-    public:
-        __fastcall TForm1(TComponent* Owner);
-        __fastcall ~TForm1();
+<ListBox ItemsSource="{Binding YourItems}"
+         ItemTemplateSelector="{StaticResource TemplateSelector}"/>
+
+
+
+
+public class MyDataTemplateSelector : DataTemplateSelector
+{
+    public DataTemplate SingleColumnTemplate { get; set; }
+    public DataTemplate TwoColumnTemplate { get; set; }
+    
+    public override DataTemplate SelectTemplate(object item, DependencyObject container)
+    {
+        var yourItem = item as YourClass;
         
-    protected:
-        void __fastcall Button1Click(TObject *Sender);
-        void __fastcall MyProcessHandler(int value);
-};
-
-// Файл Unit1.cpp
-__fastcall TForm1::TForm1(TComponent* Owner) : TForm(Owner) {
-    m_processor = new TMyClass();
-    m_processor->OnProcess = MyProcessHandler;
-}
-
-__fastcall TForm1::~TForm1() {
-    delete m_processor;
-}
-
-void __fastcall TForm1::MyProcessHandler(int value) {
-    ShowMessage("Value: " + IntToStr(value));
-}
-
-void __fastcall TForm1::Button1Click(TObject *Sender) {
-    m_processor->Execute();
-}
-
-
-________________________________________________________________
-
-
-
-
-// Файл MyClass.h
-class TMyClass {
-private:
-    void (__closure *m_callback)(int);  // __closure - особенность C++ Builder
-    int m_value;
-    
-public:
-    TMyClass() : m_callback(NULL), m_value(0) {}
-    
-    // Устанавливаем callback
-    void SetCallback(void (__closure *callback)(int)) {
-        m_callback = callback;
+        if (yourItem != null && yourItem.YourBooleanProperty)
+            return TwoColumnTemplate;
+        else
+            return SingleColumnTemplate;
     }
-    
-    void DoSomething() {
-        // Вызываем callback, если он установлен
-        if (m_callback) {
-            m_callback(m_value);
-        }
-    }
-    
-    void SetValue(int val) { m_value = val; }
-};
-
-// Файл Unit1.h (главная форма)
-#include "MyClass.h"
-
-class TForm1 : public TForm {
-    __published: // IDE-managed Components
-        TButton *Button1;
-        TEdit *Edit1;
-    private:
-        TMyClass *m_processor;
-    public:
-        __fastcall TForm1(TComponent* Owner);
-        __fastcall ~TForm1();
-        
-        // Метод, который будет вызываться как callback
-        void __fastcall OnProcess(int value);
-        
-    protected:
-        void __fastcall Button1Click(TObject *Sender);
-};
-
-// Файл Unit1.cpp
-__fastcall TForm1::TForm1(TComponent* Owner) : TForm(Owner) {
-    m_processor = new TMyClass();
-    
-    // Устанавливаем callback - передаем указатель на метод
-    m_processor->SetCallback(OnProcess);
-}
-
-__fastcall TForm1::~TForm1() {
-    delete m_processor;
-}
-
-void __fastcall TForm1::OnProcess(int value) {
-    // Этот метод вызовется из TMyClass::DoSomething()
-    Edit1->Text = IntToStr(value * 2);
-}
-
-void __fastcall TForm1::Button1Click(TObject *Sender) {
-    m_processor->SetValue(5);
-    m_processor->DoSomething(); // Здесь вызовется OnProcess
 }
