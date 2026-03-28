@@ -1,47 +1,93 @@
-<Window.Resources>
-    <DataTemplate x:Key="SingleColumnTemplate">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{Binding SomeProperty}"/>
-        </Grid>
-    </DataTemplate>
-    
-    <DataTemplate x:Key="TwoColumnTemplate">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition/>
-                <ColumnDefinition/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding SomeProperty}"/>
-            <TextBlock Grid.Column="1" Text="{Binding ExtraProperty}"/>
-        </Grid>
-    </DataTemplate>
-    
-    <local:MyDataTemplateSelector x:Key="TemplateSelector"
-        SingleColumnTemplate="{StaticResource SingleColumnTemplate}"
-        TwoColumnTemplate="{StaticResource TwoColumnTemplate}"/>
-</Window.Resources>
+Если `ElementName` не работает, это означает, что `ListBox` **не может "увидеть"** `MainControl` (т.е. `UserControl`) в момент построения привязки. Это часто случается, когда `DataTemplate` изолирован от основного дерева элементов.
 
-<ListBox ItemsSource="{Binding YourItems}"
-         ItemTemplateSelector="{StaticResource TemplateSelector}"/>
+---
 
+## ✅ **Альтернативные решения:**
 
+### 1. **DataContextProxy (работает всегда)**
+Если ты еще не пробовал — это **самый надежный способ**. Добавь `DataContextProxy` в ресурсы `UserControl`:
 
-
-public class MyDataTemplateSelector : DataTemplateSelector
+#### Класс:
+```csharp
+public class DataContextProxy : Freezable
 {
-    public DataTemplate SingleColumnTemplate { get; set; }
-    public DataTemplate TwoColumnTemplate { get; set; }
-    
-    public override DataTemplate SelectTemplate(object item, DependencyObject container)
+    protected override Freezable CreateInstanceCore() => new DataContextProxy();
+
+    public object DataContext
     {
-        var yourItem = item as YourClass;
-        
-        if (yourItem != null && yourItem.YourBooleanProperty)
-            return TwoColumnTemplate;
-        else
-            return SingleColumnTemplate;
+        get => GetValue(DataContextProperty);
+        set => SetValue(DataContextProperty, value);
     }
+
+    public static readonly DependencyProperty DataContextProperty =
+        DependencyProperty.Register("DataContext", typeof(object), typeof(DataContextProxy), new UIPropertyMetadata(null));
 }
+```
+
+#### XAML:
+```xml
+<UserControl x:Class="MyApp.MainView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:telerik="http://schemas.telerik.com/2008/xaml/presentation"
+             xmlns:local="clr-namespace:MyApp">
+    <UserControl.Resources>
+        <local:DataContextProxy x:Key="DataContextProxy" DataContext="{Binding}" />
+    </UserControl.Resources>
+
+    <telerik:RadGridView ItemsSource="{Binding MyRows}">
+        <telerik:RadGridView.RowDetailsTemplate>
+            <DataTemplate>
+                <ListBox ItemsSource="{Binding DetailItems}"
+                         SelectedItem="{Binding DataContext.SelectedItemListBox,
+                                                Source={StaticResource DataContextProxy}}" />
+            </DataTemplate>
+        </telerik:RadGridView.RowDetailsTemplate>
+    </telerik:RadGridView>
+</UserControl>
+```
+
+---
+
+### 2. **Привязка через `RelativeSource` к `AncestorType` Window**
+Если `UserControl` находится внутри `Window`, попробуй использовать `Window`:
+
+```xml
+<ListBox ItemsSource="{Binding DetailItems}"
+         SelectedItem="{Binding DataContext.SelectedItemListBox,
+                                RelativeSource={RelativeSource AncestorType=Window}}" />
+```
+
+---
+
+### 3. **Передача через CommandParameter или Property**
+Если привязка не работает, можно передать `SelectedItemListBox` через `Tag`, `TagProperty`, или через `CommandParameter`, если ты используешь `Command`.
+
+---
+
+### 4. **Использование `FindAncestor` с UserControl (проверь пространство имен)**
+Убедись, что `xmlns:local="clr-namespace:MyApp"` указан правильно, и `UserControl` имеет `x:Name`.
+
+```xml
+<ListBox ItemsSource="{Binding DetailItems}"
+         SelectedItem="{Binding DataContext.SelectedItemListBox,
+                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+```
+
+---
+
+## ❗ Проверь также:
+
+- Убедись, что `SelectedItemListBox` **свойство с `get; set;`** и реализует `INotifyPropertyChanged`, если нужно.
+- Проверь, что `DataContext` `UserControl` действительно указывает на нужную `ViewModel`.
+
+---
+
+## 📌 Если ничего не работает — проверь, что:
+
+- `DataContextProxy` добавлен в ресурсы `UserControl` (а не в `Grid` или другой элемент).
+- `ListBox` находится **внутри `DataTemplate`**, и `DataTemplate` — **в `RowDetailsTemplate`** `RadGridView`.
+
+---
+
+Если ни один из вариантов не работает — **пришли минимальный пример XAML и кода**, я помогу настроить привязку правильно.
