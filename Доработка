@@ -89,5 +89,13 @@ public class DataContextProxy : Freezable
 - `ListBox` находится **внутри `DataTemplate`**, и `DataTemplate` — **в `RowDetailsTemplate`** `RadGridView`.
 
 ---
+<telerik:RadGridView.RowDetailsTemplate>
+    <DataTemplate>
+        <ListBox ItemsSource="{Binding DetailItems}"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 MaxHeight="150"
+                 ScrollViewer.CanContentScroll="True" />
+    </DataTemplate>
+</telerik:RadGridView.RowDetailsTemplate>
 
-Если ни один из вариантов не работает — **пришли минимальный пример XAML и кода**, я помогу настроить привязку правильно.
