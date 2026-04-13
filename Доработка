@@ -102,47 +102,25 @@ public class DataContextProxy : Freezable
 -------------------------------
 
 
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Windows;
-
-public partial class MainWindow : Window
+protected override object PrepareCellForEdit(FrameworkElement editingElement, RoutedEventArgs editingEventArgs)
 {
-    [DllImport("user32.dll")]
-    static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
-
-    [DllImport("user32.dll")]
-    static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    private void LaunchAndCenterApp()
+    // По умолчанию editingElement в DataGridTextColumn — это TextBox
+    if (editingElement is TextBox textBox)
     {
-        // Запускаем внешнее приложение
-        Process process = Process.Start("notepad.exe");
+        textBox.Focus();
 
-        // Ждем, пока окно появится
-        process.WaitForInputIdle();
-        Thread.Sleep(1000); // даем время на создание окна
-
-        // Получаем Handle окна
-        IntPtr handle = process.MainWindowHandle;
-
-        // Вычисляем координаты центра нашего окна
-        int mainLeft = (int)this.Left;
-        int mainTop = (int)this.Top;
-        int mainWidth = (int)this.ActualWidth;
-        int mainHeight = (int)this.ActualHeight;
-
-        int childWidth = 600; // ширина окна внешнего приложения
-        int childHeight = 400; // высота окна внешнего приложения
-
-        int centerX = mainLeft + (mainWidth - childWidth) / 2;
-        int centerY = mainTop + (mainHeight - childHeight) / 2;
-
-        // Перемещаем окно
-        MoveWindow(handle, centerX, centerY, childWidth, childHeight, true);
-        SetForegroundWindow(handle);
+        // Проверяем, было ли редактирование вызвано нажатием клавиши (вводом текста)
+        if (editingEventArgs is TextCompositionEventArgs textArgs)
+        {
+            // Устанавливаем введенный символ как текст и ставим каретку в конец
+            textBox.Text = textArgs.Text;
+            textBox.SelectionStart = textBox.Text.Length;
+        }
+        else
+        {
+            // Если вошли через F2 или DoubleClick — выделяем всё содержимое
+            textBox.SelectAll();
+        }
     }
+    return base.PrepareCellForEdit(editingElement, editingEventArgs);
 }
-
