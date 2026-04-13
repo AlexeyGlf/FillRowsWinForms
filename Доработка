@@ -124,3 +124,39 @@ protected override object PrepareCellForEdit(FrameworkElement editingElement, Ro
     }
     return base.PrepareCellForEdit(editingElement, editingEventArgs);
 }
+
+
+
+public class WeakRelayCommand : ICommand
+{
+    private readonly WeakReference _targetRef; // хранит слабую ссылку
+    private readonly Action<object> _method;
+
+    public WeakRelayCommand(Action<object> execute, object target)
+    {
+        _targetRef = new WeakReference(target);
+        _method = execute;
+    }
+
+    public bool CanExecute(object parameter)
+    {
+        return _targetRef.Target != null; // проверяет, жив ли объект
+    }
+
+    public void Execute(object parameter)
+    {
+        if (_targetRef.Target != null)
+        {
+            _method(parameter);
+        }
+    }
+
+    public event EventHandler CanExecuteChanged
+    {
+        add { CommandManager.RequerySuggested += value; }
+        remove { CommandManager.RequerySuggested -= value; }
+    }
+}
+
+
+
