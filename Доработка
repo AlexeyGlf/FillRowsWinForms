@@ -1,162 +1,833 @@
-Если `ElementName` не работает, это означает, что `ListBox` **не может "увидеть"** `MainControl` (т.е. `UserControl`) в момент построения привязки. Это часто случается, когда `DataTemplate` изолирован от основного дерева элементов.
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Windows.Forms.Integration;
 
----
 
-## ✅ **Альтернативные решения:**
-
-### 1. **DataContextProxy (работает всегда)**
-Если ты еще не пробовал — это **самый надежный способ**. Добавь `DataContextProxy` в ресурсы `UserControl`:
-
-#### Класс:
-```csharp
-public class DataContextProxy : Freezable
+namespace WindowsFormsApp1
 {
-    protected override Freezable CreateInstanceCore() => new DataContextProxy();
-
-    public object DataContext
+    
+    public partial class Form1 : Form
     {
-        get => GetValue(DataContextProperty);
-        set => SetValue(DataContextProperty, value);
-    }
+        private ElementHost _elementHost;
+        private LibraryTest.Forms.VMHeadForm _wpfControl;
 
-    public static readonly DependencyProperty DataContextProperty =
-        DependencyProperty.Register("DataContext", typeof(object), typeof(DataContextProxy), new UIPropertyMetadata(null));
-}
-```
-
-#### XAML:
-```xml
-<UserControl x:Class="MyApp.MainView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:telerik="http://schemas.telerik.com/2008/xaml/presentation"
-             xmlns:local="clr-namespace:MyApp">
-    <UserControl.Resources>
-        <local:DataContextProxy x:Key="DataContextProxy" DataContext="{Binding}" />
-    </UserControl.Resources>
-
-    <telerik:RadGridView ItemsSource="{Binding MyRows}">
-        <telerik:RadGridView.RowDetailsTemplate>
-            <DataTemplate>
-                <ListBox ItemsSource="{Binding DetailItems}"
-                         SelectedItem="{Binding DataContext.SelectedItemListBox,
-                                                Source={StaticResource DataContextProxy}}" />
-            </DataTemplate>
-        </telerik:RadGridView.RowDetailsTemplate>
-    </telerik:RadGridView>
-</UserControl>
-```
-
----
-
-### 2. **Привязка через `RelativeSource` к `AncestorType` Window**
-Если `UserControl` находится внутри `Window`, попробуй использовать `Window`:
-
-```xml
-<ListBox ItemsSource="{Binding DetailItems}"
-         SelectedItem="{Binding DataContext.SelectedItemListBox,
-                                RelativeSource={RelativeSource AncestorType=Window}}" />
-```
-
----
-
-### 3. **Передача через CommandParameter или Property**
-Если привязка не работает, можно передать `SelectedItemListBox` через `Tag`, `TagProperty`, или через `CommandParameter`, если ты используешь `Command`.
-
----
-
-### 4. **Использование `FindAncestor` с UserControl (проверь пространство имен)**
-Убедись, что `xmlns:local="clr-namespace:MyApp"` указан правильно, и `UserControl` имеет `x:Name`.
-
-```xml
-<ListBox ItemsSource="{Binding DetailItems}"
-         SelectedItem="{Binding DataContext.SelectedItemListBox,
-                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
-```
-
----
-
-## ❗ Проверь также:
-
-- Убедись, что `SelectedItemListBox` **свойство с `get; set;`** и реализует `INotifyPropertyChanged`, если нужно.
-- Проверь, что `DataContext` `UserControl` действительно указывает на нужную `ViewModel`.
-
----
-
-## 📌 Если ничего не работает — проверь, что:
-
-- `DataContextProxy` добавлен в ресурсы `UserControl` (а не в `Grid` или другой элемент).
-- `ListBox` находится **внутри `DataTemplate`**, и `DataTemplate` — **в `RowDetailsTemplate`** `RadGridView`.
-
----
-<telerik:RadGridView.RowDetailsTemplate>
-    <DataTemplate>
-        <ListBox ItemsSource="{Binding DetailItems}"
-                 VirtualizingPanel.IsVirtualizing="True"
-                 VirtualizingPanel.VirtualizationMode="Recycling"
-                 MaxHeight="150"
-                 ScrollViewer.CanContentScroll="True" />
-    </DataTemplate>
-</telerik:RadGridView.RowDetailsTemplate>
-
--------------------------------
-
-
-protected override object PrepareCellForEdit(FrameworkElement editingElement, RoutedEventArgs editingEventArgs)
-{
-    // По умолчанию editingElement в DataGridTextColumn — это TextBox
-    if (editingElement is TextBox textBox)
-    {
-        textBox.Focus();
-
-        // Проверяем, было ли редактирование вызвано нажатием клавиши (вводом текста)
-        if (editingEventArgs is TextCompositionEventArgs textArgs)
+        private FillHandleDataGridView dataGridView;
+        private Button btnTest;
+        private Label lblInstructions;
+        private Panel topPanel;
+        private ComboBox cmbTotalColumns;
+        private CheckBox chkShowTotal;
+        public Form1()
         {
-            // Устанавливаем введенный символ как текст и ставим каретку в конец
-            textBox.Text = textArgs.Text;
-            textBox.SelectionStart = textBox.Text.Length;
-        }
-        else
-        {
-            // Если вошли через F2 или DoubleClick — выделяем всё содержимое
-            textBox.SelectAll();
-        }
-    }
-    return base.PrepareCellForEdit(editingElement, editingEventArgs);
-}
+            InitializeComponent();
+            //_elementHost = new ElementHost();
+            //_elementHost.Dock = DockStyle.Fill;
+
+            //// Создаем WPF контрол
+            //_wpfControl = new LibraryTest.Forms.VMHeadForm();
+
+            //// Помещаем WPF контрол в ElementHost
+            //_elementHost.Child = _wpfControl;
+
+            //// Добавляем на форму
+            //this.Controls.Add(_elementHost);
+
+            //return;
 
 
 
-public class WeakRelayCommand : ICommand
-{
-    private readonly WeakReference _targetRef; // хранит слабую ссылку
-    private readonly Action<object> _method;
+            this.Text = "Excel-like Fill Handle + Итоговая строка для ВСЕХ колонок";
+            this.Size = new Size(1000, 700);
+            this.StartPosition = FormStartPosition.CenterScreen;
 
-    public WeakRelayCommand(Action<object> execute, object target)
-    {
-        _targetRef = new WeakReference(target);
-        _method = execute;
-    }
+            topPanel = new Panel();
+            topPanel.Dock = DockStyle.Top;
+            topPanel.Height = 120;
+            topPanel.BackColor = Color.FromArgb(240, 240, 240);
+            topPanel.Padding = new Padding(10);
 
-    public bool CanExecute(object parameter)
-    {
-        return _targetRef.Target != null; // проверяет, жив ли объект
-    }
+            Label lblTitle = new Label();
+            lblTitle.Text = "Маркер заполнения + Итоговая строка для ВСЕХ колонок";
+            lblTitle.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+            lblTitle.Location = new Point(10, 10);
+            lblTitle.AutoSize = true;
 
-    public void Execute(object parameter)
-    {
-        if (_targetRef.Target != null)
-        {
-            _method(parameter);
+            lblInstructions = new Label();
+            lblInstructions.Text = "1. Выделите ячейки → потяните за синий квадратик\n" +
+                                   "2. Внизу отображается итоговая строка с суммой для ВСЕХ колонок\n" +
+                                   "3. Изменяйте данные - итоги обновляются автоматически";
+            lblInstructions.Font = new Font("Segoe UI", 10);
+            lblInstructions.Location = new Point(10, 40);
+            lblInstructions.AutoSize = true;
+            lblInstructions.ForeColor = Color.FromArgb(64, 64, 64);
+
+            Label lblSettings = new Label();
+            lblSettings.Text = "Настройки итогов:";
+            lblSettings.Location = new Point(10, 80);
+            lblSettings.AutoSize = true;
+
+            chkShowTotal = new CheckBox();
+            chkShowTotal.Text = "Показывать итоги";
+            chkShowTotal.Location = new Point(120, 78);
+            chkShowTotal.Checked = true;
+            chkShowTotal.CheckedChanged += (s, e) =>
+            {
+                dataGridView.ShowTotalRow = chkShowTotal.Checked;
+            };
+
+            Label lblColumns = new Label();
+            lblColumns.Text = "Колонки для суммы:";
+            lblColumns.Location = new Point(250, 80);
+            lblColumns.AutoSize = true;
+
+            cmbTotalColumns = new ComboBox();
+            cmbTotalColumns.Location = new Point(370, 77);
+            cmbTotalColumns.Width = 200;
+            cmbTotalColumns.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbTotalColumns.Items.AddRange(new object[]
+            {
+                "ВСЕ колонки (0-6)",
+                "Только числовые (2-6)",
+                "Только колонки 3,4,5"
+            });
+            cmbTotalColumns.SelectedIndex = 0;
+            cmbTotalColumns.SelectedIndexChanged += (s, e) =>
+            {
+                switch (cmbTotalColumns.SelectedIndex)
+                {
+                    case 0:
+                        dataGridView.SetColumnsToSum(0, 1, 2, 3, 4, 5, 6);
+                        break;
+                    case 1:
+                        dataGridView.SetColumnsToSum(2, 3, 4, 5, 6);
+                        break;
+                    case 2:
+                        dataGridView.SetColumnsToSum(3, 4, 5);
+                        break;
+                }
+            };
+
+            btnTest = new Button();
+            btnTest.Text = "Сбросить данные";
+            btnTest.Location = new Point(600, 75);
+            btnTest.Size = new Size(120, 25);
+            btnTest.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnTest.Click += (s, e) =>
+            {
+                dataGridView.SetSampleData();
+                dataGridView.ClearSelection();
+            };
+
+            topPanel.Controls.AddRange(new Control[]
+            {
+                lblTitle, lblInstructions,
+                lblSettings, chkShowTotal, lblColumns, cmbTotalColumns,
+                btnTest
+            });
+
+            dataGridView = new FillHandleDataGridView();
+            dataGridView.Dock = DockStyle.Fill;
+            dataGridView.SetSampleData();
+
+            this.Controls.Add(dataGridView);
+            this.Controls.Add(topPanel);
         }
     }
-
-    public event EventHandler CanExecuteChanged
+    public class FillHandleDataGridView : DataGridView
     {
-        add { CommandManager.RequerySuggested += value; }
-        remove { CommandManager.RequerySuggested -= value; }
+        // Свойства для маркера заполнения
+        private bool _isFillHandleVisible = false;
+        private Rectangle _fillHandleRect;
+        private bool _isDragging = false;
+        private Point _dragStartCell;
+        private Point _dragCurrentCell;
+        private Color _fillHandleColor = Color.FromArgb(0, 120, 215);
+        private int _fillHandleSize = 10;
+        private List<DataGridViewCell> _selectedCellsBackup;
+
+        // ВАЖНО: Флаг для предотвращения рекурсии
+        private bool _isUpdatingTotals = false;
+
+        // Свойства для итоговой строки
+        private DataGridViewRow _totalRow;
+        private bool _showTotalRow = true;
+        private Color _totalRowBackColor = Color.FromArgb(245, 245, 245);
+        private Color _totalRowForeColor = Color.FromArgb(0, 0, 0);
+        private Font _totalRowFont = new Font("Segoe UI", 9, FontStyle.Bold);
+
+        // ИЗМЕНЕНО: По умолчанию суммируем ВСЕ колонки (0-6)
+        private List<int> _columnsToSum = new List<int> { 0, 1, 2, 3, 4, 5, 6 };
+
+        public FillHandleDataGridView()
+        {
+            this.SelectionMode = DataGridViewSelectionMode.CellSelect;
+            this.MultiSelect = true;
+            this.DoubleBuffered = true;
+
+            // Подписываемся на события
+            this.Paint += DataGridView_Paint;
+            this.MouseDown += DataGridView_MouseDown;
+            this.MouseMove += DataGridView_MouseMove;
+            this.MouseUp += DataGridView_MouseUp;
+
+            // ВАЖНО: Подписываемся на события для обновления итогов
+            this.CellValueChanged += DataGridView_CellValueChanged;
+            this.RowsAdded += DataGridView_RowsAdded;
+            this.RowsRemoved += DataGridView_RowsRemoved;
+            this.DataBindingComplete += DataGridView_DataBindingComplete;
+
+            this.BackgroundColor = Color.White;
+            this.GridColor = Color.LightGray;
+            this.DefaultCellStyle.SelectionBackColor = Color.FromArgb(189, 214, 254);
+            this.DefaultCellStyle.SelectionForeColor = Color.Black;
+            this.RowHeadersWidth = 50;
+            this.ColumnHeadersHeight = 30;
+
+            this.AllowUserToAddRows = true;
+            this.AllowUserToDeleteRows = true;
+        }
+
+        #region Методы для итоговой строки
+
+        public void SetColumnsToSum(params int[] columnIndexes)
+        {
+            _columnsToSum = new List<int>(columnIndexes);
+            UpdateTotalRowValues();
+        }
+
+        public bool ShowTotalRow
+        {
+            get { return _showTotalRow; }
+            set
+            {
+                _showTotalRow = value;
+                UpdateTotalRowVisibility();
+            }
+        }
+
+        private void UpdateTotalRowVisibility()
+        {
+            if (_showTotalRow)
+            {
+                CreateTotalRowIfNeeded();
+            }
+            else if (_totalRow != null && this.Rows.Contains(_totalRow))
+            {
+                this.Rows.Remove(_totalRow);
+                _totalRow = null;
+            }
+        }
+
+        private void CreateTotalRowIfNeeded()
+        {
+            // СОЗДАЕМ итоговую строку ТОЛЬКО если есть колонки и данные
+            if (_showTotalRow && _totalRow == null && this.ColumnCount > 0 && this.Rows.Count > 0)
+            {
+                CreateTotalRow();
+            }
+        }
+
+        private void CreateTotalRow()
+        {
+            try
+            {
+                // Если строка уже существует, удаляем её
+                if (_totalRow != null && this.Rows.Contains(_totalRow))
+                {
+                    this.Rows.Remove(_totalRow);
+                    _totalRow = null;
+                }
+
+                _totalRow = new DataGridViewRow();
+                _totalRow.ReadOnly = true;
+                // Создаем ячейки для каждой колонки
+                for (int i = 0; i < this.ColumnCount; i++)
+                {
+                    DataGridViewCell cell = new DataGridViewTextBoxCell();
+
+                    cell.Style.BackColor = _totalRowBackColor;
+                    cell.Style.ForeColor = _totalRowForeColor;
+                    cell.Style.Font = _totalRowFont;
+                    cell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+
+                    _totalRow.Cells.Add(cell);
+                }
+
+                // Устанавливаем заголовок для первой ячейки
+                if (_totalRow.Cells.Count > 0)
+                {
+                    _totalRow.Cells[0].Value = "ИТОГО:";
+                    _totalRow.Cells[0].Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+                    _totalRow.Cells[0].Style.Font = _totalRowFont;
+                }
+
+                _totalRow.HeaderCell.Value = "Σ";
+                _totalRow.HeaderCell.ToolTipText = "Итоговые значения";
+
+                // Добавляем строку в КОНЕЦ таблицы
+                this.Rows.Add(_totalRow);
+
+                // Заполняем значения
+                UpdateTotalRowValues();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка создания итоговой строки: {ex.Message}");
+            }
+        }
+
+        // ИСПРАВЛЕНО: Добавлен флаг _isUpdatingTotals для защиты от рекурсии
+        private void UpdateTotalRowValues()
+        {
+            // Если уже обновляем - выходим (защита от рекурсии)
+            if (_isUpdatingTotals) return;
+
+            // Если нет итоговой строки или нет колонок - выходим
+            if (_totalRow == null || this.ColumnCount == 0) return;
+
+            try
+            {
+                _isUpdatingTotals = true;
+                this.SuspendLayout();
+
+                // ИСПРАВЛЕНО: Не очищаем все ячейки, а только числовые
+                // Оставляем "ИТОГО:" в первой колонке
+                for (int i = 1; i < _totalRow.Cells.Count; i++)
+                {
+                    if (i < this.ColumnCount)
+                    {
+                        // ВАЖНО: Устанавливаем значение без вызова событий
+                        SetCellValueWithoutEvents(_totalRow.Cells[i], null);
+                    }
+                }
+
+                // Для КАЖДОЙ колонки считаем сумму (начиная с 1, т.к. колонка 0 - текст)
+                for (int colIndex = 1; colIndex < this.ColumnCount; colIndex++)
+                {
+                    // Проверяем, нужно ли суммировать эту колонку
+                    if (!_columnsToSum.Contains(colIndex))
+                        continue;
+
+                    double sum = 0;
+                    int count = 0;
+
+                    // Проходим по всем строкам, КРОМЕ последней (итоговой)
+                    for (int rowIndex = 0; rowIndex < this.Rows.Count - 1; rowIndex++)
+                    {
+                        var row = this.Rows[rowIndex];
+
+                        // Пропускаем новую строку (если она есть)
+                        if (row.IsNewRow) continue;
+
+                        if (colIndex < row.Cells.Count)
+                        {
+                            var cell = row.Cells[colIndex];
+                            if (cell.Value != null && !string.IsNullOrEmpty(cell.Value.ToString()))
+                            {
+                                // Пытаемся распарсить число
+                                if (double.TryParse(cell.Value.ToString(), out double value))
+                                {
+                                    sum += value;
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+
+                    // Если нашли числа - выводим сумму
+                    if (count > 0 && colIndex < _totalRow.Cells.Count)
+                    {
+                        // Форматируем число
+                        string sumText;
+                        if (IsIntegerColumn(colIndex))
+                        {
+                            sumText = sum.ToString("N0");
+                        }
+                        else
+                        {
+                            sumText = sum.ToString("N2");
+                        }
+
+                        // ВАЖНО: Устанавливаем значение без вызова событий
+                        SetCellValueWithoutEvents(_totalRow.Cells[colIndex], sumText);
+                        _totalRow.Cells[colIndex].Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка обновления итогов: {ex.Message}");
+            }
+            finally
+            {
+                _isUpdatingTotals = false;
+                this.ResumeLayout();
+            }
+        }
+        // НОВЫЙ МЕТОД: Установка значения ячейки без вызова событий
+        private void SetCellValueWithoutEvents(DataGridViewCell cell, object value)
+        {
+            if (cell == null) return;
+
+            // Временно отключаем обработчик события
+            this.CellValueChanged -= DataGridView_CellValueChanged;
+
+            try
+            {
+                cell.Value = value;
+            }
+            finally
+            {
+                // Возвращаем обработчик
+                this.CellValueChanged += DataGridView_CellValueChanged;
+            }
+        }
+
+        private bool IsIntegerColumn(int colIndex)
+        {
+            // Проверяем первые 5 строк
+            for (int rowIndex = 0; rowIndex < Math.Min(5, this.Rows.Count - 1); rowIndex++)
+            {
+                var row = this.Rows[rowIndex];
+                if (row.IsNewRow) continue;
+
+                if (colIndex < row.Cells.Count)
+                {
+                    var cell = row.Cells[colIndex];
+                    if (cell.Value != null && double.TryParse(cell.Value.ToString(), out double value))
+                    {
+                        if (value != Math.Floor(value))
+                            return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // Обработчики событий
+        private void DataGridView_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            // Если изменили не итоговую строку
+            if (e.RowIndex >= 0 && e.RowIndex < this.Rows.Count - 1)
+            {
+                UpdateTotalRowValues();
+            }
+        }
+
+        private void DataGridView_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e)
+        {
+            // Если добавили первую строку данных
+            if (this.Rows.Count > 1 && _showTotalRow && _totalRow == null)
+            {
+                CreateTotalRow();
+            }
+            else
+            {
+                UpdateTotalRowValues();
+            }
+        }
+
+        private void DataGridView_RowsRemoved(object sender, DataGridViewRowsRemovedEventArgs e)
+        {
+            UpdateTotalRowValues();
+        }
+
+        private void DataGridView_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            // После загрузки данных создаем итоговую строку
+            if (_showTotalRow && this.Rows.Count > 0)
+            {
+                CreateTotalRowIfNeeded();
+            }
+        }
+
+        protected override void OnColumnAdded(DataGridViewColumnEventArgs e)
+        {
+            base.OnColumnAdded(e);
+
+            // Если добавили колонку, пересоздаем итоговую строку
+            if (_totalRow != null && this.Rows.Contains(_totalRow))
+            {
+                this.Rows.Remove(_totalRow);
+                _totalRow = null;
+            }
+
+            if (_showTotalRow && this.Rows.Count > 0)
+            {
+                CreateTotalRow();
+            }
+        }
+
+        #endregion
+
+        #region Маркер заполнения (без изменений)
+
+        private void DataGridView_Paint(object sender, PaintEventArgs e)
+        {
+            UpdateFillHandlePosition();
+
+            if (_isFillHandleVisible && !_isDragging)
+            {
+                DrawFillHandle(e.Graphics);
+            }
+
+            if (_isDragging)
+            {
+                DrawDragRectangle(e.Graphics);
+            }
+        }
+
+        private void UpdateFillHandlePosition()
+        {
+            if (this.SelectedCells.Count > 0)
+            {
+                DataGridViewCell lastCell = GetLastSelectedCell();
+
+                if (lastCell != null && lastCell.RowIndex >= 0 && lastCell.ColumnIndex >= 0)
+                {
+                    Rectangle cellRect = this.GetCellDisplayRectangle(lastCell.ColumnIndex, lastCell.RowIndex, false);
+
+                    _fillHandleRect = new Rectangle(
+                        cellRect.Right - _fillHandleSize,
+                        cellRect.Bottom - _fillHandleSize,
+                        _fillHandleSize,
+                        _fillHandleSize
+                    );
+
+                    _isFillHandleVisible = true;
+                }
+            }
+            else
+            {
+                _isFillHandleVisible = false;
+            }
+        }
+
+        private DataGridViewCell GetLastSelectedCell()
+        {
+            DataGridViewCell lastCell = null;
+            int maxRow = -1;
+            int maxCol = -1;
+
+            foreach (DataGridViewCell cell in this.SelectedCells)
+            {
+                if (cell.RowIndex >= maxRow && cell.ColumnIndex >= maxCol)
+                {
+                    maxRow = cell.RowIndex;
+                    maxCol = cell.ColumnIndex;
+                    lastCell = cell;
+                }
+            }
+            return lastCell;
+        }
+
+        private void DrawFillHandle(Graphics g)
+        {
+            using (SolidBrush brush = new SolidBrush(_fillHandleColor))
+            {
+                g.FillRectangle(brush, _fillHandleRect);
+            }
+
+            using (Pen pen = new Pen(Color.White, 1))
+            {
+                g.DrawRectangle(pen, _fillHandleRect);
+            }
+        }
+
+        private void DrawDragRectangle(Graphics g)
+        {
+            if (_dragStartCell != null && _dragCurrentCell != null)
+            {
+                int minRow = Math.Min(_dragStartCell.Y, _dragCurrentCell.Y);
+                int maxRow = Math.Max(_dragStartCell.Y, _dragCurrentCell.Y);
+                int minCol = Math.Min(_dragStartCell.X, _dragCurrentCell.X);
+                int maxCol = Math.Max(_dragStartCell.X, _dragCurrentCell.X);
+
+                Rectangle dragRect = Rectangle.Empty;
+                for (int row = minRow; row <= maxRow; row++)
+                {
+                    for (int col = minCol; col <= maxCol; col++)
+                    {
+                        if (row >= 0 && row < this.Rows.Count &&
+                            col >= 0 && col < this.Columns.Count)
+                        {
+                            Rectangle cellRect = this.GetCellDisplayRectangle(col, row, false);
+                            if (dragRect.IsEmpty)
+                                dragRect = cellRect;
+                            else
+                                dragRect = Rectangle.Union(dragRect, cellRect);
+                        }
+                    }
+                }
+
+                if (!dragRect.IsEmpty)
+                {
+                    using (SolidBrush brush = new SolidBrush(Color.FromArgb(50, _fillHandleColor)))
+                    {
+                        g.FillRectangle(brush, dragRect);
+                    }
+
+                    using (Pen pen = new Pen(_fillHandleColor, 2))
+                    {
+                        pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                        g.DrawRectangle(pen, dragRect);
+                    }
+                }
+            }
+        }
+
+        private void DataGridView_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && _isFillHandleVisible && _fillHandleRect.Contains(e.Location))
+            {
+                // ПОЛУЧАЕМ ТЕКУЩУЮ ЯЧЕЙКУ
+                var hit = this.HitTest(e.X, e.Y);
+
+                // ЕСЛИ ЭТО ПОСЛЕДНЯЯ СТРОКА - ЗАПРЕЩАЕМ
+                if (hit.RowIndex == this.Rows.Count - 2)
+                {
+                    // Это итоговая строка - не начинаем перетаскивание
+                    this.Cursor = Cursors.Default;
+                    return;
+                }
+
+                // Сохраняем выделенные ячейки
+                _selectedCellsBackup = new List<DataGridViewCell>();
+                foreach (DataGridViewCell cell in this.SelectedCells)
+                {
+                    _selectedCellsBackup.Add(cell);
+                }
+
+                // Начинаем перетаскивание
+                _isDragging = true;
+
+                _dragStartCell = new Point(hit.ColumnIndex, hit.RowIndex);
+                _dragCurrentCell = _dragStartCell;
+
+                this.Cursor = Cursors.Cross;
+                this.Invalidate();
+                
+
+            }
+        }
+
+        private void DataGridView_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_isDragging)
+            {
+                var hit = this.HitTest(e.X, e.Y);
+                if (hit.Type == DataGridViewHitTestType.Cell)
+                {
+                    // НЕ ДАЕМ ПЕРЕТАСКИВАТЬ НА ИТОГОВУЮ СТРОКУ
+                    if (hit.RowIndex == this.Rows.Count - 1)
+                    {
+                        // Если пытаются навести на итоговую строку - игнорируем
+                        return;
+                    }
+
+                    if (_dragCurrentCell.X != hit.ColumnIndex || _dragCurrentCell.Y != hit.RowIndex)
+                    {
+                        _dragCurrentCell = new Point(hit.ColumnIndex, hit.RowIndex);
+                        this.Invalidate();
+                    }
+                }
+            }
+            else
+            {
+                // При наведении на маркер
+                if (_isFillHandleVisible && _fillHandleRect.Contains(e.Location))
+                {
+                    // Проверяем, не находится ли маркер на итоговой строке
+                    var hit = this.HitTest(e.X, e.Y);
+                    if (hit.RowIndex == this.Rows.Count - 1)
+                    {
+                        // Если маркер на итоговой строке - обычный курсор
+                        this.Cursor = Cursors.Default;
+                    }
+                    else
+                    {
+                        this.Cursor = Cursors.Cross;
+                    }
+                }
+                else
+                {
+                    this.Cursor = Cursors.Default;
+                }
+            }
+        }
+
+        private void DataGridView_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (_isDragging && e.Button == MouseButtons.Left)
+            {
+                FillCells();
+
+                _isDragging = false;
+                _isFillHandleVisible = false;
+                this.Invalidate();
+                this.Cursor = Cursors.Default;
+
+                // Обновляем итоги после заполнения
+                UpdateTotalRowValues();
+            }
+        }
+
+        private void FillCells()
+        {
+            if (_dragStartCell == null || _dragCurrentCell == null || _selectedCellsBackup == null)
+                return;
+
+            int minRow = Math.Min(_dragStartCell.Y, _dragCurrentCell.Y);
+            int maxRow = Math.Max(_dragStartCell.Y, _dragCurrentCell.Y);
+            int minCol = Math.Min(_dragStartCell.X, _dragCurrentCell.X);
+            int maxCol = Math.Max(_dragStartCell.X, _dragCurrentCell.X);
+
+            this.BeginInvoke(new MethodInvoker(() =>
+            {
+                try
+                {
+                    for (int row = minRow; row <= maxRow; row++)
+                    {
+                        for (int col = minCol; col <= maxCol; col++)
+                        {
+                            bool isSourceCell = false;
+                            foreach (DataGridViewCell sourceCell in _selectedCellsBackup)
+                            {
+                                if (sourceCell.RowIndex == row && sourceCell.ColumnIndex == col)
+                                {
+                                    isSourceCell = true;
+                                    break;
+                                }
+                            }
+
+                            if (!isSourceCell && row < this.Rows.Count && col < this.Columns.Count)
+                            {
+                                if (_selectedCellsBackup.Count > 0)
+                                {
+                                    object valueToCopy = _selectedCellsBackup[0].Value;
+
+                                    if (_selectedCellsBackup.Count > 1)
+                                    {
+                                        if (IsNumericSeries(_selectedCellsBackup, out List<object> series))
+                                        {
+                                            int index = (row - minRow) * (maxCol - minCol + 1) + (col - minCol);
+                                            if (index < series.Count)
+                                            {
+                                                valueToCopy = series[index];
+                                            }
+                                        }
+                                    }
+
+                                    this.Rows[row].Cells[col].Value = valueToCopy;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка при заполнении: {ex.Message}");
+                }
+            }));
+        }
+
+        private bool IsNumericSeries(List<DataGridViewCell> cells, out List<object> series)
+        {
+            series = new List<object>();
+
+            List<double> numbers = new List<double>();
+            foreach (var cell in cells)
+            {
+                if (double.TryParse(cell.Value?.ToString(), out double num))
+                {
+                    numbers.Add(num);
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            if (numbers.Count >= 2)
+            {
+                double step = numbers[1] - numbers[0];
+                bool isArithmetic = true;
+
+                for (int i = 1; i < numbers.Count; i++)
+                {
+                    if (Math.Abs(numbers[i] - (numbers[0] + step * i)) > 0.0001)
+                    {
+                        isArithmetic = false;
+                        break;
+                    }
+                }
+
+                if (isArithmetic)
+                {
+                    for (int i = 0; i < 100; i++)
+                    {
+                        series.Add(numbers[0] + step * i);
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        public void SetSampleData()
+        {
+            this.ColumnCount = 7;
+
+            for (int i = 0; i < 7; i++)
+            {
+                this.Columns[i].Name = $"Колонка {i + 1}";
+                this.Columns[i].Width = 100;
+                this.Columns[i].SortMode = DataGridViewColumnSortMode.NotSortable;
+            }
+
+            // ОЧИЩАЕМ все строки
+            this.Rows.Clear();
+
+            Random rand = new Random();
+            for (int row = 0; row < 15; row++)
+            {
+                int rowIndex = this.Rows.Add();
+                for (int col = 0; col < 7; col++)
+                {
+                    if (col == 0)
+                        this.Rows[rowIndex].Cells[col].Value = row + 1; // Номер строки
+                    else if (col == 1)
+                        this.Rows[rowIndex].Cells[col].Value = $"Товар {row + 1}"; // Название
+                    else
+                        // Для остальных колонок - случайные числа (100-999)
+                        this.Rows[rowIndex].Cells[col].Value = rand.Next(100, 999);
+                }
+            }
+
+            // ВАЖНО: После заполнения данными создаем итоговую строку
+            if (_showTotalRow)
+            {
+                // Удаляем старую итоговую строку, если есть
+                if (_totalRow != null && this.Rows.Contains(_totalRow))
+                {
+                    this.Rows.Remove(_totalRow);
+                    _totalRow = null;
+                }
+
+                // Создаем новую
+                CreateTotalRow();
+            }
+        }
     }
 }
-
-
 
