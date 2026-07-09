@@ -865,6 +865,20 @@ var binding = new Binding("ShowExtraColumn")
     Source = this.DataContext,
     Converter = new BooleanToVisibilityConverter()
 };
+// Используем BindingOperations
+BindingOperations.SetBinding(MyColumn, DataGridColumn.VisibilityProperty, binding);
+
+private bool _showExtraColumn = true;
+public bool ShowExtraColumn
+{
+    get => _showExtraColumn;
+    set
+    {
+        _showExtraColumn = value;
+        ExtraColumnVisibility = value ? Visibility.Visible : Visibility.Collapsed;
+        OnPropertyChanged();
+    }
+}
 
 // Используем BindingOperations
 BindingOperations.SetBinding(MyColumn, DataGridColumn.VisibilityProperty, binding);
