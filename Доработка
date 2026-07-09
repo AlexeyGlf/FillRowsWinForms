@@ -831,3 +831,46 @@ namespace WindowsFormsApp1
     }
 }
 
+
+-------------------------------------------------------
+
+
+
+
+public static class ColumnVisibility
+{
+    public static readonly DependencyProperty IsVisibleProperty =
+        DependencyProperty.RegisterAttached("IsVisible", typeof(bool), typeof(ColumnVisibility),
+            new PropertyMetadata(true, OnIsVisibleChanged));
+
+    public static void SetIsVisible(DependencyObject element, bool value)
+        => element.SetValue(IsVisibleProperty, value);
+
+    public static bool GetIsVisible(DependencyObject element)
+        => (bool)element.GetValue(IsVisibleProperty);
+
+    private static void OnIsVisibleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is DataGridColumn column)
+        {
+            column.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+}
+-------------------------------------------------------
+
+
+var binding = new Binding("ShowExtraColumn")
+{
+    Source = this.DataContext,
+    Converter = new BooleanToVisibilityConverter()
+};
+
+// Используем BindingOperations
+BindingOperations.SetBinding(MyColumn, DataGridColumn.VisibilityProperty, binding);
+
+-------------------------------------------------------
+            <DataGridTemplateColumn x:Name="MyColumn" 
+                local:ColumnVisibility.IsVisible="{Binding DataContext.ShowColumn, 
+RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"/>
+
