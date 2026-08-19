@@ -859,32 +859,48 @@ public static class ColumnVisibility
 }
 -------------------------------------------------------
 
-
-var binding = new Binding("ShowExtraColumn")
-{
-    Source = this.DataContext,
-    Converter = new BooleanToVisibilityConverter()
-};
-// Используем BindingOperations
-BindingOperations.SetBinding(MyColumn, DataGridColumn.VisibilityProperty, binding);
-
-private bool _showExtraColumn = true;
-public bool ShowExtraColumn
-{
-    get => _showExtraColumn;
-    set
-    {
-        _showExtraColumn = value;
-        ExtraColumnVisibility = value ? Visibility.Visible : Visibility.Collapsed;
-        OnPropertyChanged();
-    }
-}
-
-// Используем BindingOperations
-BindingOperations.SetBinding(MyColumn, DataGridColumn.VisibilityProperty, binding);
-
 -------------------------------------------------------
-            <DataGridTemplateColumn x:Name="MyColumn" 
-                local:ColumnVisibility.IsVisible="{Binding DataContext.ShowColumn, 
-RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"/>
 
+
+
+<DataGrid x:Name="MyDataGrid"
+          ItemsSource="{Binding Orders}"
+          RowDetailsVisibilityMode="Visible"
+          VirtualizingPanel.IsVirtualizing="True"
+          VirtualizingPanel.VirtualizationMode="Recycling"
+          ScrollViewer.CanContentScroll="True">
+    
+    <!-- ⚠️ КЛЮЧЕВОЙ МОМЕНТ: Настройка ItemsPanel для виртуализации RowDetails -->
+    <DataGrid.ItemsPanel>
+        <ItemsPanelTemplate>
+            <VirtualizingStackPanel IsVirtualizing="True"
+                                   VirtualizationMode="Recycling"
+                                   ScrollUnit="Item" />
+        </ItemsPanelTemplate>
+    </DataGrid.ItemsPanel>
+    
+    <DataGrid.RowDetailsTemplate>
+        <DataTemplate>
+            <!-- Ограничиваем высоту! Без этого виртуализация не работает -->
+            <Border MaxHeight="200" Background="#F5F5F5" Padding="5">
+                <ItemsControl ItemsSource="{Binding Items}"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling">
+                    
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel IsVirtualizing="True"
+                                                   VirtualizationMode="Recycling"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding ProductName}" Margin="10,2"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </DataTemplate>
+    </DataGrid.RowDetailsTemplate>
+</DataGrid>
