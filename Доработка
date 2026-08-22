@@ -904,3 +904,62 @@ public static class ColumnVisibility
         </DataTemplate>
     </DataGrid.RowDetailsTemplate>
 </DataGrid>
+
+
+
+-------------------------------------------------------
+public static string ConvertToXmlGeneric<T>(IList<T> collection, string rootName = "Items")
+{
+    var root = new XElement(rootName);
+
+    foreach (var item in collection)
+    {
+        var itemElement = new XElement(typeof(T).Name);
+
+        // Получаем все публичные свойства
+        var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        foreach (var prop in properties)
+        {
+            // Пропускаем индексаторы
+            if (prop.GetIndexParameters().Length > 0) continue;
+
+            var value = prop.GetValue(item);
+            if (value == null) continue;
+
+            // Обрабатываем коллекции
+            if (prop.PropertyType.IsGenericType &&
+                prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>))
+            {
+                var listElement = new XElement(prop.Name);
+                var list = (System.Collections.IList)value;
+
+                foreach (var listItem in list)
+                {
+                    var itemElement2 = new XElement(prop.PropertyType.GetGenericArguments()[0].Name)
+                    {
+                        Value = listItem?.ToString() ?? ""
+                    };
+                    listElement.Add(itemElement2);
+                }
+
+                itemElement.Add(listElement);
+            }
+            else
+            {
+                // Простые типы
+                itemElement.Add(new XElement(prop.Name, value));
+            }
+        }
+
+        root.Add(itemElement);
+    }
+
+    var document = new XDocument(
+        new XDeclaration("1.0", "utf-8", "yes"),
+        root
+    );
+
+    return document.ToString(SaveOptions.None);
+}
+
