@@ -908,293 +908,48 @@ public static class ColumnVisibility
 
 
 -------------------------------------------------------
-public static string ConvertToXmlGeneric<T>(IList<T> collection, string rootName = "Items")
+public class ColumnHeaderComparer : IComparer<Column>
 {
-    var root = new XElement(rootName);
-
-    foreach (var item in collection)
+    private readonly Dictionary<string, int> _orderMap;
+    
+    public ColumnHeaderComparer(string orderString)
     {
-        var itemElement = new XElement(typeof(T).Name);
-
-        // Получаем все публичные свойства
-        var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        foreach (var prop in properties)
-        {
-            // Пропускаем индексаторы
-            if (prop.GetIndexParameters().Length > 0) continue;
-
-            var value = prop.GetValue(item);
-            if (value == null) continue;
-
-            // Обрабатываем коллекции
-            if (prop.PropertyType.IsGenericType &&
-                prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>))
-            {
-                var listElement = new XElement(prop.Name);
-                var list = (System.Collections.IList)value;
-
-                foreach (var listItem in list)
-                {
-                    var itemElement2 = new XElement(prop.PropertyType.GetGenericArguments()[0].Name)
-                    {
-                        Value = listItem?.ToString() ?? ""
-                    };
-                    listElement.Add(itemElement2);
-                }
-
-                itemElement.Add(listElement);
-            }
-            else
-            {
-                // Простые типы
-                itemElement.Add(new XElement(prop.Name, value));
-            }
-        }
-
-        root.Add(itemElement);
+        _orderMap = orderString.Split(',')
+                              .Select((h, i) => new { Header = h.Trim(), Index = i })
+                              .Where(x => !string.IsNullOrEmpty(x.Header))
+                              .ToDictionary(x => x.Header, x => x.Index);
     }
-
-    var document = new XDocument(
-        new XDeclaration("1.0", "utf-8", "yes"),
-        root
-    );
-
-    return document.ToString(SaveOptions.None);
-}
-
-
-// ========== ДЕСЕРИАЛИЗАЦИЯ ==========
-public static ObservableCollection<T> DeserializeFromXml<T>(string xml) where T : class, new()
-{
-    var document = XDocument.Parse(xml);
-    var root = document.Root;
-
-    if (root == null)
-        return new ObservableCollection<T>();
-
-    var collection = new ObservableCollection<T>();
-
-    foreach (var itemElement in root.Elements())
+    
+    public int Compare(Column x, Column y)
     {
-        var item = DeserializeObject<T>(itemElement);
-        collection.Add(item);
-    }
-
-    return collection;
-}
-
-private static T DeserializeObject<T>(XElement element) where T : class, new()
-{
-    var obj = new T();
-    var type = typeof(T);
-
-    var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-    foreach (var prop in properties)
-    {
-        if (prop.GetIndexParameters().Length > 0) continue;
-
-        var propElement = element.Element(prop.Name);
-        if (propElement == null) continue;
-
-        // Определяем тип свойства
-        var propType = prop.PropertyType;
-
-        try
+        if (x == null && y == null) return 0;
+        if (x == null) return -1;
+        if (y == null) return 1;
+        
+        var indexX = _orderMap.TryGetValue(x.Header, out var ix) ? ix : int.MaxValue;
+        var indexY = _orderMap.TryGetValue(y.Header, out var iy) ? iy : int.MaxValue;
+        
+        var result = indexX.CompareTo(indexY);
+        
+        // Если оба неизвестны - сортируем по алфавиту
+        if (result == 0 && indexX == int.MaxValue)
         {
-            // Коллекции
-            if (IsCollectionType(propType))
-            {
-                var collection = DeserializeCollection(propElement, propType);
-                prop.SetValue(obj, collection);
-            }
-            // Простые типы
-            else if (IsPrimitiveType(propType))
-            {
-                string propValue = default;
-                if (propType == typeof(decimal) || propType == typeof(float))
-                    propValue = propElement.Value.Replace('.', ',');
-                else
-                    propValue = propElement.Value;
-                var value = Convert.ChangeType(propValue, propType);
-                prop.SetValue(obj, value);
-            }
-            // Сложные объекты
-            else
-            {
-                var childObject = DeserializeComplexObject(propElement, propType);
-                prop.SetValue(obj, childObject);
-            }
+            return string.Compare(x.Header, y.Header, StringComparison.Ordinal);
         }
-        catch (Exception ex)
-        {
-            // Логируем или игнорируем ошибки
-            Console.WriteLine($"Error deserializing property {prop.Name}: {ex.Message}");
-        }
-    }
-
-    return obj;
-}
-
-private static object DeserializeComplexObject(XElement element, Type type)
-{
-    // Создаем объект через конструктор по умолчанию
-    var obj = Activator.CreateInstance(type);
-
-    // Получаем все свойства
-    var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-    foreach (var prop in properties)
-    {
-        if (prop.GetIndexParameters().Length > 0) continue;
-
-        var propElement = element.Element(prop.Name);
-        if (propElement == null) continue;
-
-        var propType = prop.PropertyType;
-
-        try
-        {
-            if (IsCollectionType(propType))
-            {
-                var collection = DeserializeCollection(propElement, propType);
-                prop.SetValue(obj, collection);
-            }
-            else if (IsPrimitiveType(propType))
-            {
-                var value = Convert.ChangeType(propElement.Value, propType);
-                prop.SetValue(obj, value);
-            }
-            else
-            {
-                var childObject = DeserializeComplexObject(propElement, propType);
-                prop.SetValue(obj, childObject);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deserializing property {prop.Name}: {ex.Message}");
-        }
-    }
-
-    return obj;
-}
-
-private static object DeserializeCollection(XElement element, Type collectionType)
-{
-    // Определяем тип элементов коллекции
-    Type itemType;
-
-    if (collectionType.IsGenericType)
-    {
-        itemType = collectionType.GetGenericArguments()[0];
-    }
-    else if (collectionType.IsArray)
-    {
-        itemType = collectionType.GetElementType();
-    }
-    else
-    {
-        // Если не удалось определить, используем object
-        itemType = typeof(object);
-    }
-
-    // Создаем коллекцию
-    var list = new List<object>();
-
-    foreach (var childElement in element.Elements())
-    {
-        if (itemType == typeof(string) || IsPrimitiveType(itemType))
-        {
-            // Примитивные типы
-            var value = Convert.ChangeType(childElement.Value, itemType);
-            list.Add(value);
-        }
-        else if (itemType.IsClass)
-        {
-            // Сложные объекты
-            var childObject = DeserializeComplexObject(childElement, itemType);
-            list.Add(childObject);
-        }
-        else
-        {
-            // Другие типы
-            var value = Convert.ChangeType(childElement.Value, itemType);
-            list.Add(value);
-        }
-    }
-
-    // Преобразуем в нужный тип коллекции
-    if (collectionType == typeof(List<>).MakeGenericType(itemType) ||
-        collectionType.IsGenericType && collectionType.GetGenericTypeDefinition() == typeof(List<>))
-    {
-        var listType = typeof(List<>).MakeGenericType(itemType);
-        var result = Activator.CreateInstance(listType);
-        var addMethod = listType.GetMethod("Add");
-
-        foreach (var item in list)
-        {
-            addMethod?.Invoke(result, new[] { item });
-        }
-
+        
         return result;
     }
-    else if (collectionType == typeof(ObservableCollection<>).MakeGenericType(itemType) ||
-             collectionType.IsGenericType && collectionType.GetGenericTypeDefinition() == typeof(ObservableCollection<>))
-    {
-        var ocType = typeof(ObservableCollection<>).MakeGenericType(itemType);
-        var result = Activator.CreateInstance(ocType);
-
-        var addMethod = ocType.GetMethod("Add");
-        foreach (var item in list)
-        {
-            addMethod?.Invoke(result, new[] { item });
-        }
-
-        return result;
-    }
-    else if (collectionType.IsArray)
-    {
-        var array = Array.CreateInstance(itemType, list.Count);
-        for (int i = 0; i < list.Count; i++)
-        {
-            array.SetValue(list[i], i);
-        }
-        return array;
-    }
-    else
-    {
-        // Возвращаем как есть (например, IEnumerable)
-        return list;
-    }
 }
 
-private static bool IsCollectionType(Type type)
+// Использование
+public static void SortWithComparer(ObservableCollection<Column> columns, string orderString)
 {
-    if (type == typeof(string)) return false;
-    if (type == typeof(byte[])) return false;
-
-    return typeof(System.Collections.IEnumerable).IsAssignableFrom(type) ||
-           type.IsArray ||
-           (type.IsGenericType &&
-            (type.GetGenericTypeDefinition() == typeof(List<>) ||
-             type.GetGenericTypeDefinition() == typeof(ObservableCollection<>) ||
-             type.GetGenericTypeDefinition() == typeof(IEnumerable<>) ||
-             type.GetGenericTypeDefinition() == typeof(ICollection<>)));
-}
-
-private static bool IsPrimitiveType(Type type)
-{
-    return type.IsPrimitive ||
-           type == typeof(string) ||
-           type == typeof(decimal) ||
-           type == typeof(float) ||
-           type == typeof(DateTime) ||
-           type == typeof(DateTimeOffset) ||
-           type == typeof(TimeSpan) ||
-           type == typeof(Guid) ||
-           type == typeof(byte[]) ||
-           type.IsEnum ||
-           type == typeof(object);
+    var comparer = new ColumnHeaderComparer(orderString);
+    var sorted = columns.OrderBy(c => c, comparer).ToList();
+    
+    columns.Clear();
+    foreach (var item in sorted)
+    {
+        columns.Add(item);
+    }
 }
