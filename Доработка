@@ -953,3 +953,43 @@ public static void SortWithComparer(ObservableCollection<Column> columns, string
         columns.Add(item);
     }
 }
+
+
+
+
+----------------------------------------------------------------------
+WITH RECURSIVE_OBJECTS (ObjectID, NoDelObjectID, ActualID, lvl) AS (
+    SELECT ObjectID, NoDelObjectID, ObjectID AS ActualID, 1 AS lvl
+    FROM your_table
+    WHERE NoDelObjectID IS NULL
+    
+    UNION ALL
+    
+    SELECT t.ObjectID, t.NoDelObjectID, r.ActualID, r.lvl + 1
+    FROM your_table t
+    INNER JOIN RECURSIVE_OBJECTS r ON t.NoDelObjectID = r.ObjectID
+)
+SELECT DISTINCT ActualID
+FROM RECURSIVE_OBJECTS
+ORDER BY ActualID;
+
+
+
+--
+WITH RECURSIVE_OBJECTS (ObjectID, NoDelObjectID, RootID) AS (
+    -- Базовый случай: объекты, которые не были удалены (NoDelObjectID пустой)
+    SELECT ObjectID, NoDelObjectID, ObjectID AS RootID
+    FROM your_table
+    WHERE NoDelObjectID IS NULL
+    
+    UNION ALL
+    
+    -- Рекурсивный случай: идём вверх по цепочке от удалённых объектов к актуальным
+    SELECT t.ObjectID, t.NoDelObjectID, r.RootID
+    FROM your_table t
+    INNER JOIN RECURSIVE_OBJECTS r ON t.NoDelObjectID = r.ObjectID
+    WHERE t.NoDelObjectID IS NOT NULL
+)
+SELECT DISTINCT RootID AS ActualObjectID
+FROM RECURSIVE_OBJECTS
+ORDER BY RootID;
