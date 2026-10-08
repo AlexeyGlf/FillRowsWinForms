@@ -993,3 +993,46 @@ WITH RECURSIVE_OBJECTS (ObjectID, NoDelObjectID, RootID) AS (
 SELECT DISTINCT RootID AS ActualObjectID
 FROM RECURSIVE_OBJECTS
 ORDER BY RootID;
+
+-----
+WITH RECURSIVE_OBJECTS (ObjectID, NoDelObjectID, ActualID, lvl, path) AS (
+    SELECT ObjectID, NoDelObjectID, ObjectID AS ActualID, 1, TO_CHAR(ObjectID)
+    FROM your_table
+    WHERE NoDelObjectID IS NULL
+    
+    UNION ALL
+    
+    SELECT t.ObjectID, t.NoDelObjectID, r.ActualID, r.lvl + 1,
+           r.path || ' → ' || TO_CHAR(t.ObjectID)
+    FROM your_table t
+    INNER JOIN RECURSIVE_OBJECTS r ON t.NoDelObjectID = r.ObjectID
+    WHERE t.NoDelObjectID IS NOT NULL
+)
+SELECT 
+    ActualID AS KeptObjectID,
+    LISTAGG(ObjectID, ', ') WITHIN GROUP (ORDER BY lvl) AS DeletedObjectIDs,
+    LISTAGG(path, ' | ') WITHIN GROUP (ORDER BY lvl) AS Chains
+FROM RECURSIVE_OBJECTS
+GROUP BY ActualID
+ORDER BY ActualID;
+
+----
+WITH RECURSIVE_OBJECTS (ObjectID, NoDelObjectID, ActualID) AS (
+    SELECT ObjectID, NoDelObjectID, ObjectID AS ActualID
+    FROM your_table
+    WHERE NoDelObjectID IS NULL
+    
+    UNION ALL
+    
+    SELECT t.ObjectID, t.NoDelObjectID, r.ActualID
+    FROM your_table t
+    INNER JOIN RECURSIVE_OBJECTS r ON t.NoDelObjectID = r.ObjectID
+    WHERE t.NoDelObjectID IS NOT NULL
+)
+SELECT 
+    ActualID AS KeptObjectID,
+    LISTAGG(ObjectID, ', ') WITHIN GROUP (ORDER BY ObjectID) AS DeletedObjectIDs
+FROM RECURSIVE_OBJECTS
+WHERE ObjectID <> ActualID          -- исключаем сам оставленный объект
+GROUP BY ActualID
+ORDER BY ActualID;
